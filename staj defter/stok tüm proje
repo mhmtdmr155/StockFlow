@@ -1,0 +1,725 @@
+```text
+# ELECTROMTECH STOK TAKİP SİSTEMİ
+
+## Detaylı Proje Dokümanı ve Yol Haritası (Güncel Sürüm)
+
+# 1. PROJE ÖZETİ
+
+## Proje Adı
+
+ElectromTech Stok Takip Sistemi
+
+## Projenin Amacı
+
+Şirket içerisinde kullanılan;
+
+* Elektronik Bileşenler
+* Ofis Malzemeleri
+* Elektronik Cihazlar
+* Cihaz Ekipmanları
+* Sarf Malzemeleri
+* Diğer tüm ürünlerin;
+
+tek bir sistem üzerinden;
+
+* Stok takibini,
+* Giriş-çıkış işlemlerini,
+* Ürün yönetimini,
+* Kategori yönetimini,
+* Kullanıcı yönetimini,
+* Bildirimlerini,
+* Raporlamasını,
+* Denetim kayıtlarını,
+* Offline kullanımını
+
+yönetebilecek profesyonel bir stok yönetim sistemi geliştirmektir.
+
+Sistem;
+
+* Web
+* Mobil
+* Tablet
+* Masaüstü
+
+cihazlarda sorunsuz çalışmalıdır.
+
+---
+
+# 2. PROJE TÜRÜ
+
+Proje tamamen Progressive Web App (PWA) olarak geliştirilecektir.
+
+## Özellikler
+
+* Ana ekrana eklenebilir olacak.
+* Android ve iOS desteği olacak.
+* Uygulama gibi çalışacak.
+* Responsive olacak.
+* Offline kullanım desteği olacak.
+* Push Notification desteği olacak.
+* Background Sync desteği olacak.
+* Mobil, tablet ve masaüstünde kusursuz görünecek.
+* Otomatik güncelleme desteği olacak.
+* Cache sistemi bulunacak.
+
+---
+
+# 3. TEKNOLOJİ YIĞINI
+
+## Frontend
+
+* React
+* TypeScript
+* Vite
+* Tailwind CSS
+* Shadcn UI
+* Zustand
+* React Query
+* React Router
+* Dexie.js
+* vite-plugin-pwa
+
+## Backend
+
+* Node.js
+* Express.js
+* TypeScript
+
+## Veritabanı
+
+* PostgreSQL
+* Prisma ORM
+
+## Authentication
+
+* JWT Authentication
+* Refresh Token
+* Bcrypt
+
+## Diğer Teknolojiler
+
+* Docker
+* Docker Compose
+* Nginx
+* Push Notification API
+* Service Worker
+* IndexedDB
+
+---
+
+# 4. SİSTEM MİMARİSİ
+
+Mobil / Web / Tablet
+          ↓
+React PWA Frontend
+          ↓
+REST API
+          ↓
+Node.js Backend
+          ↓
+PostgreSQL Veritabanı
+          ↓
+Dosya Depolama
+          ↓
+Push Notification Servisi
+
+---
+
+# 5. KULLANICI ROLLERİ
+
+## Admin
+
+Yetkiler:
+
+* Kullanıcı oluşturma
+* Kullanıcı düzenleme
+* Kullanıcı pasifleştirme
+* Kategori oluşturma
+* Kategori düzenleme
+* Kategori silme
+* Ürün oluşturma
+* Ürün düzenleme
+* Ürün silme
+* Dashboard görüntüleme
+* Rapor alma
+* Bildirim yönetimi
+* Audit log görüntüleme
+* Sistem ayarlarını yönetme
+
+---
+
+## Kullanıcı
+
+Yetkiler:
+
+* Ürün görüntüleme
+* Ürün arama
+* Ürün filtreleme
+* Stok artırma
+* Stok azaltma
+* Ürün detaylarını görüntüleme
+* Bildirim görüntüleme
+
+---
+
+# 6. VERİTABANI TASARIMI
+
+## users
+
+id
+username
+password_hash
+role
+is_active
+deleted_at
+created_at
+updated_at
+
+---
+
+## categories
+
+id
+name
+parent_id
+icon
+color
+form_schema JSONB
+deleted_at
+created_at
+updated_at
+
+Açıklama:
+
+* parent_id sayesinde sınırsız alt kategori desteği olacaktır.
+* form_schema sayesinde kategoriye özel dinamik form alanları yönetilecektir.
+
+---
+
+## products
+
+id
+category_id
+product_code
+material_code
+name
+description
+stock_quantity
+minimum_stock
+location
+attributes JSONB
+version
+deleted_at
+created_at
+updated_at
+
+Açıklama:
+
+* attributes alanı kategoriye özel verileri JSONB olarak tutacaktır.
+* version alanı race condition problemlerini önlemek için kullanılacaktır.
+
+---
+
+## stock_movements
+
+id
+product_id
+user_id
+change_amount
+movement_type
+reason
+created_at
+
+movement_type:
+
+IN
+OUT
+
+---
+
+## notifications
+
+id
+product_id
+message
+is_read
+created_at
+
+---
+
+## product_images
+
+id
+product_id
+url
+is_primary
+created_at
+
+---
+
+## sync_queue
+
+id
+user_id
+action_type
+payload JSONB
+status
+created_at
+synced_at
+
+---
+
+## audit_logs
+
+id
+user_id
+entity_type
+entity_id
+action
+old_data JSONB
+new_data JSONB
+ip_address
+created_at
+
+---
+
+# 7. KATEGORİ YAPISI
+
+Elektronik Bileşenler
+├── Direnç
+│   ├── THT
+│   └── SMD
+├── Kondansatör
+├── Bobin
+├── Röle
+├── Entegre
+├── Çip
+├── Regülatör
+├── Yarı İletken Bileşenler
+├── Yarı İletken Anahtarlar
+├── Konnektör
+└── Diğer
+
+Ofis Malzemeleri
+├── Cihazlar
+└── Elektronik Cihazlar
+
+Kategori sistemi sınırsız alt kategori desteğine sahiptir.
+
+---
+
+# 8. DİNAMİK ÜRÜN EKLEME SİSTEMİ
+
+Kullanıcı önce kategori seçer.
+
+Sistem seçilen kategoriye göre form alanlarını otomatik oluşturur.
+
+Örnek:
+
+## Direnç
+
+{
+  "resistance":"10KΩ",
+  "tolerance":"±1%",
+  "watt":"0.125W",
+  "package":"0603",
+  "mount_type":"SMD"
+}
+
+## Kondansatör
+
+{
+  "capacitance":"220uF",
+  "tolerance":"%20",
+  "voltage":"50v",
+  "package":"10x10",
+  "mount_type":"SMD",
+  "capacitor_type":"Alüminyum Elektrolitik"
+}
+
+## Entegre
+
+{
+  "voltage":"5V",
+  "current":"2A",
+  "package":"DIP"
+}
+
+## Ofis Malzemesi
+
+{
+  "brand":"HP",
+  "model":"LaserJet",
+  "serial_no":"ABC123"
+}
+
+---
+
+# 9. GİRİŞ EKRANI
+
+Alanlar:
+
+* Kullanıcı Adı
+* Şifre
+* Beni Hatırla
+* Şifremi Unuttum
+
+---
+
+# 10. JWT YAPISI
+
+## Access Token
+
+15 dakika
+
+## Refresh Token
+
+7 gün
+
+## Beni Hatırla
+
+30 gün
+
+Frontend:
+
+{
+  "rememberMe": true
+}
+
+Backend:
+
+expiresIn = rememberMe ? "30d" : "7d";
+
+---
+
+# 11. DASHBOARD
+
+Gösterilecek bilgiler:
+
+* Toplam Ürün Sayısı
+* Toplam Kategori Sayısı
+* Düşük Stoklu Ürünler
+* Son Stok Hareketleri
+* Kategori Bazlı Stok Dağılımı
+* En Çok Kullanılan Ürünler
+* Son Eklenen Ürünler
+* Kritik Stok Uyarıları
+
+---
+
+# 12. ÜRÜN LİSTESİ
+
+Özellikler:
+
+* Arama
+* Filtreleme
+* Sıralama
+* Sayfalama
+* Toplu İşlem
+
+Filtreler:
+
+* Kategori
+* Ürün Kodu
+* Malzeme Kodu
+* Stok Durumu
+* Konum
+* Tarih
+
+---
+
+# 13. ÜRÜN DETAY SAYFASI
+
+Gösterilecek bilgiler:
+
+* Ürün Bilgileri
+* Ürün Görselleri
+* Stok Miktarı
+* Stok Hareket Geçmişi
+* Son Kullanıcı İşlemleri
+* Audit Kayıtları
+
+---
+
+# 14. STOK YÖNETİMİ
+
+## Stok Artırma
+
+stock = stock + X
+
+## Stok Azaltma
+
+stock = stock - X
+
+Mutlak değer ataması yapılmayacaktır.
+
+Örnek:
+
+stock = 5
+
+kullanılmayacaktır.
+
+---
+
+# NEGATİF STOK KONTROLÜ
+
+Frontend:
+
+* Son senkronize edilmiş stok miktarını kontrol eder.
+
+Backend:
+
+* Nihai stok doğrulaması yapar.
+
+---
+
+# RACE CONDITION ÇÖZÜMÜ
+
+products tablosundaki:
+
+version
+
+alanı kullanılacaktır.
+
+Versiyon uyuşmazlığı oluşursa:
+
+409 CONFLICT
+
+hatası döndürülür.
+
+---
+
+# 15. DÜŞÜK STOK SİSTEMİ
+
+Her ürün için:
+
+minimum_stock
+
+alanı bulunacaktır.
+
+Örnek:
+
+minimum_stock = 10
+stock_quantity = 9
+
+olduğunda sistem otomatik bildirim oluşturacaktır.
+
+---
+
+# 16. BİLDİRİM SİSTEMİ
+
+Bildirimler:
+
+* Düşük Stok Uyarısı
+* Kritik Stok Uyarısı
+* Yeni Ürün Ekleme
+* Kullanıcı İşlemleri
+
+Push Notification desteği bulunacaktır.
+
+---
+
+# 17. OFFLINE PWA MİMARİSİ
+
+Özellikler:
+
+* IndexedDB
+* Dexie.js
+* Service Worker
+* Cache API
+* Background Sync
+
+Offline işlemler:
+
+sync_queue
+
+tablosuna yazılır.
+
+İnternet bağlantısı geldiğinde backend ile senkronize edilir.
+
+---
+
+# 18. SOFT DELETE YAPISI
+
+Hiçbir veri kalıcı olarak silinmeyecektir.
+
+Silme işlemi:
+
+deleted_at = NOW()
+
+şeklinde yapılacaktır.
+
+Tüm sorgular:
+
+WHERE deleted_at IS NULL
+
+şartını içerecektir.
+
+---
+
+# 19. KATEGORİ SİLME KURALI
+
+Bir kategori;
+
+* Alt kategori içeriyorsa,
+* İçinde ürün bulunuyorsa
+
+silinemez.
+
+Yalnızca boş kategoriler silinebilir.
+
+---
+
+# 20. API ENDPOINTLERİ
+
+## Authentication
+
+POST /login
+POST /logout
+POST /refresh-token
+
+---
+
+## Dashboard
+
+GET /dashboard/stats
+GET /dashboard/charts
+
+---
+
+## Categories
+
+GET /categories
+GET /categories/:id
+GET /categories/:id/fields
+POST /categories
+PUT /categories/:id
+DELETE /categories/:id
+
+---
+
+## Products
+
+GET /products
+GET /products/:id
+GET /products/search
+GET /products/low-stock
+GET /products/:id/history
+POST /products
+PUT /products/:id
+DELETE /products/:id
+
+---
+
+## Stock
+
+POST /products/:id/increase
+POST /products/:id/decrease
+GET /products/:id/movements
+
+---
+
+## Users
+
+GET /users
+POST /users
+PUT /users/:id
+DELETE /users/:id
+
+---
+
+## Notifications
+
+GET /notifications
+PUT /notifications/:id
+
+---
+
+## Reports
+
+GET /reports/excel
+GET /reports/pdf
+
+---
+
+## Audit Logs
+
+GET /audit-logs
+
+---
+
+# 21. GÜVENLİK
+
+* JWT Authentication
+* Refresh Token
+* Bcrypt ile şifreleme
+* SQL Injection koruması
+* XSS koruması
+* CORS koruması
+* Input Validation
+* Rate Limiting
+* Role Based Authorization
+* Audit Logging
+
+---
+
+# 22. DOCKER YAPISI
+
+frontend
+backend
+postgres
+nginx
+
+Tek komutla ayağa kaldırılacaktır:
+
+docker-compose up -d
+
+---
+
+# 23. TEST SENARYOLARI
+
+* Login
+* Logout
+* Kullanıcı Yönetimi
+* Kategori Yönetimi
+* Alt Kategori Yönetimi
+* Ürün CRUD İşlemleri
+* Dinamik Form Sistemi
+* Stok Artırma
+* Stok Azaltma
+* Negatif Stok Kontrolü
+* Offline Senkronizasyon
+* Race Condition Testleri
+* Düşük Stok Uyarısı
+* Dashboard
+* Bildirim Sistemi
+* Responsive Tasarım
+* Android Görünümü
+* iOS Görünümü
+* PWA Kurulumu
+* Güvenlik Testleri
+* Performans Testleri
+
+---
+
+# 24. GELECEKTE EKLENEBİLECEK ÖZELLİKLER
+
+* Barkod Sistemi
+* QR Kod Sistemi
+* Excel Dışa Aktarma
+* PDF Raporları
+* Satın Alma Modülü
+* Tedarikçi Yönetimi
+* Ürün Görsel Yönetimi
+* Karanlık Mod
+* E-posta Bildirimleri
+* Çoklu Depo Yönetimi
+* Seri Numarası Takibi
+* RFID Desteği
+
+---
+
+# 25. PROJENİN NİHAİ HEDEFİ
+
+Profesyonel, modern, ölçeklenebilir, mobil uyumlu, offline çalışabilen, PWA destekli, dinamik kategori yönetimine sahip, gelişmiş stok hareket sistemi bulunan ve gerçek bir şirket ortamında aktif olarak kullanılabilecek kurumsal seviyede bir ElectromTech Stok Takip Sistemi geliştirmektir.
+```
