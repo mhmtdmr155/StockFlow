@@ -152,16 +152,6 @@ Erişim: `http://localhost:5173`
 
 ---
 
-## 🔑 Varsayılan Giriş Bilgileri
-
-Sistem ilk kurulduğunda varsayılan yönetici hesabı otomatik oluşturulur:
-
-| Rol | Kullanıcı Adı | Şifre |
-| :--- | :--- | :--- |
-| **Yönetici (Admin)** | `admin` | `admin123` |
-| **Standart Kullanıcı** | `user` | `user123` |
-
----
 
 ## 🌐 API Uç Noktaları (Endpoints Summary)
 
