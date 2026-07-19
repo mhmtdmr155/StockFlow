@@ -5,14 +5,16 @@ import crypto from 'crypto';
 const CSRF_EXEMPT_PATHS = ['/api/login', '/api/refresh-token', '/api/logout'];
 
 export const doubleSubmitCookieCSRF = (req: Request, res: Response, next: NextFunction) => {
+  const isProd = process.env.NODE_ENV === 'production';
+  const existingToken = req.cookies?.csrfToken;
+
   // Generate and set CSRF cookie if it doesn't exist
-  const existingToken = req.cookies.csrfToken;
   if (!existingToken) {
     const csrfToken = crypto.randomBytes(24).toString('hex');
     res.cookie('csrfToken', csrfToken, {
       httpOnly: false, // Must be readable by JS for double-submit pattern
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',  // 'lax' works better for local network access
+      secure: isProd,
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000 // 24 hours
     });
   }
@@ -27,7 +29,14 @@ export const doubleSubmitCookieCSRF = (req: Request, res: Response, next: NextFu
     return next();
   }
 
-  const cookieToken = req.cookies.csrfToken;
+  // Requests authenticated via Bearer token in Authorization header are immune to CSRF
+  // (Browsers never automatically send Authorization Bearer headers on cross-site requests)
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
+  const cookieToken = req.cookies?.csrfToken;
   const headerToken = req.headers['x-csrf-token'];
 
   if (!cookieToken || !headerToken || cookieToken !== headerToken) {
@@ -36,3 +45,4 @@ export const doubleSubmitCookieCSRF = (req: Request, res: Response, next: NextFu
 
   next();
 };
+
