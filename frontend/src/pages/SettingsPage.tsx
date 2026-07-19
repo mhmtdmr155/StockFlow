@@ -215,9 +215,14 @@ export const SettingsPage = () => {
   const deleteUserMutation = useMutation({
     mutationFn: deleteUser,
     onSuccess: () => {
-      queryClient.invalidateQueries();
+      queryClient.invalidateQueries({ queryKey: ['users'] });
     },
+    onError: (err: any) => {
+      alert(err?.response?.data?.error || 'Kullanıcı silinirken hata oluştu');
+    }
   });
+
+
 
   // Category Mutations
   const createCategoryMutation = useMutation({

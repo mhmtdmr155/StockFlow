@@ -155,6 +155,11 @@ export const deleteUser = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Geçersiz kullanıcı ID' });
     }
 
+    const authReq = req as AuthenticatedRequest;
+    if (authReq.user?.id === id) {
+      return res.status(400).json({ error: 'Kendi hesabınızı silemezsiniz' });
+    }
+
     const user = await prisma.user.findFirst({
       where: { id, deletedAt: null }
     });
@@ -163,26 +168,30 @@ export const deleteUser = async (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Kullanıcı bulunamadı' });
     }
 
-    // Soft delete
+    // Soft delete user and deactivate account
     await prisma.user.update({
       where: { id },
-      data: { deletedAt: new Date() }
+      data: {
+        deletedAt: new Date(),
+        isActive: false
+      }
     });
 
     // Log action
-    const authReq = req as AuthenticatedRequest;
     await prisma.auditLog.create({
       data: {
         userId: authReq.user?.id,
         entityType: 'USER',
         entityId: id,
         action: 'DELETE',
-        oldData: { username: user.username } as any
+        oldData: { username: user.username, role: user.role } as any
       }
     });
 
     res.json({ success: true, message: 'Kullanıcı başarıyla silindi' });
   } catch (error) {
+    console.error('Delete user error:', error);
     res.status(500).json({ error: 'Kullanıcı silinirken hata oluştu' });
   }
 };
+
