@@ -172,52 +172,48 @@ export const DashboardPage = () => {
     [pieData]
   );
 
-  // Stat kartları config
+  // Stat kartları config (Tüm veriler %100 canlı veritabanından çekilmektedir)
   const statCards = stats ? [
     {
       label: 'Toplam Ürün',
       value: stats.totalProducts.toLocaleString('tr-TR'),
-      trend: 12.5,
       icon: <PackageCheck className="h-5 w-5 text-blue-500" />,
       iconBg: isDark ? 'bg-blue-500/10' : 'bg-blue-50'
     },
     {
       label: 'Toplam Stok',
       value: stats.totalStock.toLocaleString('tr-TR'),
-      trend: 8.4,
       icon: <Box className="h-5 w-5 text-amber-500" />,
       iconBg: isDark ? 'bg-amber-500/10' : 'bg-amber-50'
     },
     {
       label: 'Kritik Stok',
       value: stats.lowStockCount,
-      trend: -5.6,
       icon: <AlertTriangle className="h-5 w-5 text-red-500" />,
       iconBg: isDark ? 'bg-red-500/10' : 'bg-red-50'
     },
     {
       label: 'Bugün Giriş',
-      value: stats.todayIn,
-      trend: 15.3,
+      value: `${stats.todayIn.toLocaleString('tr-TR')} adet`,
       icon: <ArrowDown className="h-5 w-5 text-emerald-500" />,
       iconBg: isDark ? 'bg-emerald-500/10' : 'bg-emerald-50'
     },
     {
       label: 'Bugün Çıkış',
-      value: stats.todayOut,
-      trend: 7.8,
+      value: `${stats.todayOut.toLocaleString('tr-TR')} adet`,
       icon: <ArrowUp className="h-5 w-5 text-violet-500" />,
       iconBg: isDark ? 'bg-violet-500/10' : 'bg-violet-50'
     },
     {
       label: 'En Çok Kullanılan',
       value: stats.mostUsedProduct?.name || '-',
-      subValue: stats.mostUsedProduct ? `${stats.mostUsedProduct.quantity.toLocaleString('tr-TR')} adet` : undefined,
+      subValue: stats.mostUsedProduct ? `${stats.mostUsedProduct.quantity.toLocaleString('tr-TR')} adet stok` : undefined,
       icon: <Star className="h-5 w-5 text-amber-500" />,
       iconBg: isDark ? 'bg-amber-500/10' : 'bg-amber-50',
       isText: true
     }
   ] : [];
+
 
   const isLoading = statsLoading || chartsLoading;
 
@@ -284,7 +280,6 @@ export const DashboardPage = () => {
               key={i}
               label={card.label}
               value={card.value}
-              trend={card.trend}
               icon={card.icon}
               iconBg={card.iconBg}
               isDark={isDark}
