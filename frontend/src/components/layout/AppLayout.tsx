@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Search, PlusCircle, User as UserIcon, LogOut, Sun, Moon, LayoutDashboard, Wifi, WifiOff, RefreshCw } from 'lucide-react';
+import { Search, PlusCircle, User as UserIcon, LogOut, Sun, Moon, LayoutDashboard, Wifi, WifiOff, RefreshCw, Briefcase } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeProvider';
 import { db } from '../../lib/db';
-import logoUrl from '../../assets/logo.jpeg';
+import logoUrl from '../../assets/logo.png';
 import { ShortcutHelpOverlay } from '../ui/ShortcutHelpOverlay';
 
 /* ─────────────────────────────────────
@@ -169,6 +169,7 @@ export const Sidebar = () => {
 
   const navItems = [
     { name: 'Dashboard',  path: '/',           icon: LayoutDashboard },
+    { name: 'Projeler',   path: '/projects',   icon: Briefcase },
     { name: 'Ara',        path: '/search',      icon: Search },
     { name: 'Yeni Ürün',  path: '/product/new', icon: PlusCircle },
     { name: 'Ayarlar',   path: '/settings',    icon: UserIcon },
@@ -248,8 +249,9 @@ export const BottomNav = () => {
 
   const navItems = [
     { name: 'Ana Sayfa', path: '/',           icon: LayoutDashboard },
-    { name: 'Ara',       path: '/search',      icon: Search },
+    { name: 'Projeler',  path: '/projects',   icon: Briefcase },
     { name: 'Hızlı Ekle', path: '/product/new', icon: PlusCircle, main: true },
+    { name: 'Ara',       path: '/search',      icon: Search },
     { name: 'Ayarlar',    path: '/settings',    icon: UserIcon },
   ];
 

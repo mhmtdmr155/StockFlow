@@ -5,6 +5,12 @@ export interface DashboardStats {
   totalCategories: number;
   lowStockCount: number;
   totalStock: number;
+  todayIn: number;
+  todayOut: number;
+  mostUsedProduct: {
+    name: string;
+    quantity: number;
+  } | null;
 }
 
 export interface CategoryDistributionItem {
@@ -31,10 +37,20 @@ export interface RecentMovementItem {
   };
 }
 
+export interface CriticalStockItem {
+  id: number;
+  name: string;
+  productCode: string;
+  stockQuantity: number;
+  minimumStock: number;
+  percentage: number;
+}
+
 export interface DashboardChartsData {
   categoryDistribution: CategoryDistributionItem[];
   recentMovements: RecentMovementItem[];
   recentProducts: any[];
+  criticalStocks: CriticalStockItem[];
 }
 
 export const getDashboardStats = async (): Promise<DashboardStats> => {

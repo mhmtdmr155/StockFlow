@@ -22,6 +22,7 @@ export interface Product {
   version: number;
   createdAt: string;
   updatedAt: string;
+  projects?: ProjectProduct[];
 }
 
 export interface StockMovement {
@@ -31,7 +32,7 @@ export interface StockMovement {
   changeAmount: number;
   movementType: 'IN' | 'OUT';
   reason: string | null;
-  userName?: string; // resolved on frontend for display
+  userName?: string;
   createdAt: string;
 }
 
@@ -53,3 +54,42 @@ export interface Notification {
     productCode: string;
   };
 }
+
+export interface ProjectProduct {
+  id: number;
+  projectId: number;
+  productId: number;
+  quantity: number;
+  note?: string | null;
+  assignedAt: string;
+  product: {
+    id: number;
+    name: string;
+    productCode: string;
+    stockQuantity: number;
+    minimumStock: number;
+    location?: string | null;
+    category: { name: string; icon?: string | null };
+  };
+  project?: {
+    id: number;
+    name: string;
+    status: string;
+  };
+  assignedBy?: { username: string };
+}
+
+export interface Project {
+  id: number;
+  name: string;
+  description?: string | null;
+  status: 'PLANNING' | 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  startDate?: string | null;
+  endDate?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt?: string | null;
+  createdBy?: { username: string } | null;
+  products: ProjectProduct[];
+}
+

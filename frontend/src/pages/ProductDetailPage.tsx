@@ -3,13 +3,14 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProductById, deleteProduct, getCategories } from '../api/products';
 import { getStockMovements, addStockMovement } from '../api/stockMovements';
+import { getProjects, addProductToProject, removeProductFromProject } from '../api/projects';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
 import { Skeleton } from '../components/ui/skeleton';
-import { ArrowLeft, Edit, Trash2, Plus, Minus, History, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Plus, Minus, History, AlertTriangle, Briefcase, X, ChevronRight } from 'lucide-react';
 import { useTheme } from '../context/ThemeProvider';
 
 export const ProductDetailPage = () => {
@@ -29,6 +30,11 @@ export const ProductDetailPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [undoCountdown, setUndoCountdown] = useState<number | null>(null);
   const intervalRef = useRef<any>(null);
+
+  // Proje atama state
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<number | null>(null);
+  const [assignQty, setAssignQty] = useState(1);
 
   useEffect(() => {
     return () => {
@@ -78,6 +84,12 @@ export const ProductDetailPage = () => {
     queryFn: () => getStockMovements(productId),
   });
 
+  const { data: allProjects } = useQuery({
+    queryKey: ['projects'],
+    queryFn: getProjects,
+    enabled: isProjectDialogOpen
+  });
+
   const category = categories?.find(c => c.id === product?.categoryId);
 
   const deleteMutation = useMutation({
@@ -103,8 +115,24 @@ export const ProductDetailPage = () => {
     },
     onError: (error: any) => {
       alert(error.response?.data?.error || 'Stok güncellenirken hata oluştu');
-      queryClient.invalidateQueries({ queryKey: ['product', productId] }); // refetch to get fresh version
+      queryClient.invalidateQueries({ queryKey: ['product', productId] });
     }
+  });
+
+  const assignProjectMutation = useMutation({
+    mutationFn: () => addProductToProject(selectedProjectId!, productId, assignQty),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['product', productId] });
+      setIsProjectDialogOpen(false);
+      setSelectedProjectId(null);
+      setAssignQty(1);
+    },
+    onError: (err: any) => alert(err.response?.data?.error || 'Projeye eklenirken hata oluştu')
+  });
+
+  const removeFromProjectMutation = useMutation({
+    mutationFn: (projId: number) => removeProductFromProject(projId, productId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['product', productId] })
   });
 
   const handleStockUpdate = () => {
@@ -112,6 +140,14 @@ export const ProductDetailPage = () => {
     const amount = changeType === 'add' ? stockChange : -stockChange;
     stockMutation.mutate(amount);
   };
+
+  // Ürünün bağlı olduğu projeler
+  const productProjects: any[] = (product as any)?.projects || [];
+
+  // Dialog için atanmamış projeler
+  const availableProjects = (allProjects || []).filter(p =>
+    !productProjects.some((pp: any) => pp.projectId === p.id)
+  );
 
   if (isLoading) {
     return (
@@ -296,7 +332,7 @@ export const ProductDetailPage = () => {
           </Card>
         </div>
 
-        {/* Sağ Kolon - Stok İşlemleri */}
+        {/* Sağ Kolon - Stok İşlemleri + Proje */}
         <div className="space-y-6">
           <Card className={`rounded-xl border shadow-md transition-all duration-150
             ${isLowStock 
@@ -369,7 +405,6 @@ export const ProductDetailPage = () => {
                         <Input 
                           type="number" 
                           min="1"
-                          /* text-base (16px) prevents iOS automatic zoom on focus */
                           className="h-12 text-base rounded-sm"
                           value={stockChange || ''} 
                           onChange={(e) => setStockChange(Number(e.target.value))} 
@@ -379,7 +414,6 @@ export const ProductDetailPage = () => {
                         <label className="text-sm font-medium">Sebep / Not (Opsiyonel)</label>
                         <Input 
                           value={stockReason} 
-                          /* text-base (16px) prevents iOS automatic zoom on focus */
                           className="h-12 text-base rounded-sm"
                           onChange={(e) => setStockReason(e.target.value)} 
                           placeholder="Örn: Proje için kullanıldı"
@@ -401,8 +435,148 @@ export const ProductDetailPage = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Proje Ataması Kartı */}
+          <Card className={`rounded-xl border shadow-sm transition-all duration-150
+            ${isDark
+              ? 'bg-[#1e293b] border-white/[0.07]'
+              : 'bg-white border-slate-200/80 shadow-slate-900/[0.03]'
+            }`}>
+            <CardHeader className="pb-3">
+              <CardTitle className={`text-sm font-bold flex items-center gap-2 ${isDark ? 'text-white' : 'text-slate-800'}`}>
+                <Briefcase className="h-4 w-4 text-amber-500" /> Proje Atamaları
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {productProjects.length > 0 ? (
+                <div className="space-y-2">
+                  {productProjects.map((pp: any) => (
+                    <div key={pp.id} className={`flex items-center gap-2 p-2.5 rounded-lg border transition-colors
+                      ${isDark ? 'border-white/[0.06] bg-white/[0.02]' : 'border-slate-100 bg-slate-50/50'}`}>
+                      <div className="flex-1 min-w-0">
+                        <Link
+                          to={`/projects/${pp.projectId}`}
+                          className={`text-xs font-bold hover:underline block truncate
+                            ${isDark ? 'text-amber-400' : 'text-amber-600'}`}
+                        >
+                          {pp.project?.name}
+                        </Link>
+                        <p className={`text-[10px] mt-0.5 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                          Miktar: {pp.quantity}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => removeFromProjectMutation.mutate(pp.projectId)}
+                        disabled={removeFromProjectMutation.isPending}
+                        className={`h-7 w-7 rounded-md flex items-center justify-center shrink-0 transition-colors
+                          ${isDark ? 'text-slate-600 hover:text-red-400 hover:bg-red-500/10' : 'text-slate-300 hover:text-red-500 hover:bg-red-50'}`}
+                        title="Projeden çıkar"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className={`text-xs text-center py-2 ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Hiçbir projeye atanmamış
+                </p>
+              )}
+              <Button
+                onClick={() => setIsProjectDialogOpen(true)}
+                variant="outline"
+                className="w-full h-10 rounded-lg text-xs gap-2 btn-tactile"
+              >
+                <Briefcase className="h-3.5 w-3.5" /> Projeye Ata
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </div>
+
+      {/* Projeye Ata Modalı */}
+      <Dialog open={isProjectDialogOpen} onOpenChange={open => { setIsProjectDialogOpen(open); if (!open) { setSelectedProjectId(null); setAssignQty(1); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Briefcase className="h-5 w-5 text-amber-500" /> Projeye Ata
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className={`rounded-lg border divide-y max-h-52 overflow-y-auto
+              ${isDark ? 'border-white/10 divide-white/[0.06]' : 'border-slate-200 divide-slate-100'}`}>
+              {availableProjects.length === 0 ? (
+                <div className="py-8 text-center">
+                  <p className="text-sm text-slate-500">
+                    {(allProjects || []).length === 0
+                      ? 'Henüz proje yok'
+                      : 'Tüm projelere zaten atanmış'}
+                  </p>
+                  <Link
+                    to="/projects"
+                    className="text-xs text-amber-500 hover:underline mt-1 inline-block"
+                  >
+                    Projeler sayfasına git →
+                  </Link>
+                </div>
+              ) : availableProjects.map(project => (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => setSelectedProjectId(project.id === selectedProjectId ? null : project.id)}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors
+                    ${selectedProjectId === project.id
+                      ? isDark ? 'bg-amber-500/10' : 'bg-amber-50'
+                      : isDark ? 'hover:bg-white/[0.03]' : 'hover:bg-slate-50'
+                    }`}
+                >
+                  <div className={`h-8 w-8 rounded-md flex items-center justify-center shrink-0
+                    ${selectedProjectId === project.id
+                      ? isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-100 text-amber-600'
+                      : isDark ? 'bg-white/[0.06] text-slate-400' : 'bg-slate-100 text-slate-500'
+                    }`}>
+                    <Briefcase className="h-4 w-4" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={`text-xs font-bold truncate ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
+                      {project.name}
+                    </p>
+                    <p className={`text-[10px] ${isDark ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {project.products.length} ürün
+                    </p>
+                  </div>
+                  {selectedProjectId === project.id && (
+                    <ChevronRight className="h-4 w-4 text-amber-500 shrink-0" />
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {selectedProjectId && (
+              <div className="space-y-1.5">
+                <label className={`text-sm font-semibold ${isDark ? 'text-slate-300' : 'text-slate-700'}`}>Miktar</label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={assignQty}
+                  onChange={e => setAssignQty(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="h-11 text-base"
+                />
+              </div>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsProjectDialogOpen(false)} className="h-11">İptal</Button>
+            <Button
+              onClick={() => assignProjectMutation.mutate()}
+              disabled={!selectedProjectId || assignProjectMutation.isPending}
+              className="h-11 bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              {assignProjectMutation.isPending ? 'Atanıyor...' : 'Ata'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

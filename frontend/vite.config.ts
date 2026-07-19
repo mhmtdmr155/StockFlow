@@ -8,7 +8,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'prompt',
-      includeAssets: ['icon.svg', 'logo.jpeg'],
+      includeAssets: ['icon.svg', 'logo.png'],
       manifest: {
         name: 'StockFlow',
         short_name: 'StockFlow',
@@ -18,9 +18,9 @@ export default defineConfig({
         display: 'standalone',
         icons: [
           {
-            src: 'logo.jpeg',
+            src: 'logo.png',
             sizes: '192x192 512x512',
-            type: 'image/jpeg',
+            type: 'image/png',
             purpose: 'any'
           },
           {
@@ -36,14 +36,14 @@ export default defineConfig({
             short_name: 'Stok',
             description: 'Hızlıca stok listesini görüntüle',
             url: '/',
-            icons: [{ src: 'logo.jpeg', sizes: '192x192' }]
+            icons: [{ src: 'logo.png', sizes: '192x192' }]
           },
           {
             name: 'Yeni Ürün Ekle',
             short_name: 'Yeni',
             description: 'Yeni bir ürün ekle',
             url: '/product/new',
-            icons: [{ src: 'logo.jpeg', sizes: '192x192' }]
+            icons: [{ src: 'logo.png', sizes: '192x192' }]
           }
         ]
       },

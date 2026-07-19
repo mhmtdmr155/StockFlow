@@ -14,6 +14,8 @@ const ProductDetailPage = lazy(() => import('./pages/ProductDetailPage').then(m 
 const ProductFormPage = lazy(() => import('./pages/ProductFormPage').then(m => ({ default: m.ProductFormPage })));
 const SearchPage = lazy(() => import('./pages/SearchPage').then(m => ({ default: m.SearchPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage').then(m => ({ default: m.ProjectsPage })));
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage').then(m => ({ default: m.ProjectDetailPage })));
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { PwaInstallPrompt } from './components/ui/PwaInstallPrompt';
@@ -73,6 +75,8 @@ function App() {
                             <Route path="/product/:id" element={<ProductDetailPage />} />
                             <Route path="/search" element={<SearchPage />} />
                             <Route path="/settings" element={<SettingsPage />} />
+                            <Route path="/projects" element={<ProjectsPage />} />
+                            <Route path="/projects/:id" element={<ProjectDetailPage />} />
                             <Route path="*" element={<Navigate to="/" replace />} />
                           </Routes>
                         </Suspense>
