@@ -73,42 +73,71 @@ export const createProject = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Proje adı zorunludur' });
     }
 
-    // productIds: Array<{ productId: number; quantity: number; note?: string }>
     const productsData = Array.isArray(productIds) ? productIds : [];
 
-    const project = await prisma.project.create({
-      data: {
-        name: name.trim(),
-        description: description || null,
-        status: status || 'PLANNING',
-        startDate: startDate ? new Date(startDate) : null,
-        endDate: endDate ? new Date(endDate) : null,
-        createdById: authReq.user?.id || null,
-        products: {
-          create: productsData.map((p: { productId: number; quantity?: number; note?: string }) => ({
-            productId: p.productId,
-            quantity: p.quantity || 1,
-            note: p.note || null,
-            assignedById: authReq.user?.id || null
-          }))
-        }
-      },
-      include: {
-        products: {
-          include: { product: { select: productSelectFields } }
+    const project = await prisma.$transaction(async (tx) => {
+      const newProj = await tx.project.create({
+        data: {
+          name: name.trim(),
+          description: description || null,
+          status: status || 'PLANNING',
+          startDate: startDate ? new Date(startDate) : null,
+          endDate: endDate ? new Date(endDate) : null,
+          createdById: authReq.user?.id || null,
+          products: {
+            create: productsData.map((p: { productId: number; quantity?: number; note?: string }) => ({
+              productId: Number(p.productId),
+              quantity: Number(p.quantity) || 1,
+              note: p.note || null,
+              assignedById: authReq.user?.id || null
+            }))
+          }
         },
-        createdBy: { select: { username: true } }
-      }
-    });
+        include: {
+          products: {
+            include: { product: { select: productSelectFields } }
+          },
+          createdBy: { select: { username: true } }
+        }
+      });
 
-    await prisma.auditLog.create({
-      data: {
-        userId: authReq.user?.id,
-        entityType: 'PROJECT',
-        entityId: project.id,
-        action: 'CREATE',
-        newData: project as any
+      // Automatic Stock Deduction & Stock Movement Logging for created products
+      for (const p of productsData) {
+        const pId = Number(p.productId);
+        const qty = Number(p.quantity) || 1;
+        if (!pId || qty <= 0) continue;
+
+        // Decrement product stock
+        await tx.product.update({
+          where: { id: pId },
+          data: { stockQuantity: { decrement: qty } }
+        });
+
+        // Record stock movement (OUT)
+        if (authReq.user?.id) {
+          await tx.stockMovement.create({
+            data: {
+              productId: pId,
+              userId: authReq.user.id,
+              changeAmount: -qty,
+              movementType: 'OUT',
+              reason: `Proje kullanımı: ${newProj.name}`
+            }
+          });
+        }
       }
+
+      await tx.auditLog.create({
+        data: {
+          userId: authReq.user?.id,
+          entityType: 'PROJECT',
+          entityId: newProj.id,
+          action: 'CREATE',
+          newData: newProj as any
+        }
+      });
+
+      return newProj;
     });
 
     res.status(201).json(project);
@@ -201,53 +230,77 @@ export const addProductToProject = async (req: Request, res: Response) => {
     const authReq = req as AuthenticatedRequest;
     const projectId = parseInt(req.params.id);
     const { productId, quantity, note } = req.body;
+    const pId = parseInt(productId);
+    const qty = parseInt(quantity) || 1;
 
-    if (isNaN(projectId) || !productId) {
+    if (isNaN(projectId) || isNaN(pId)) {
       return res.status(400).json({ error: 'Geçersiz proje veya ürün ID' });
     }
 
-    const project = await prisma.project.findFirst({ where: { id: projectId, deletedAt: null } });
-    if (!project) return res.status(404).json({ error: 'Proje bulunamadı' });
+    const pp = await prisma.$transaction(async (tx) => {
+      const project = await tx.project.findFirst({ where: { id: projectId, deletedAt: null } });
+      if (!project) throw new Error('Proje bulunamadı');
 
-    const product = await prisma.product.findFirst({ where: { id: parseInt(productId), deletedAt: null } });
-    if (!product) return res.status(404).json({ error: 'Ürün bulunamadı' });
+      const product = await tx.product.findFirst({ where: { id: pId, deletedAt: null } });
+      if (!product) throw new Error('Ürün bulunamadı');
 
-    // Zaten atanmış mı?
-    const existing = await prisma.projectProduct.findUnique({
-      where: { projectId_productId: { projectId, productId: parseInt(productId) } }
-    });
-
-    if (existing) {
-      // Zaten varsa miktarı artır
-      const updated = await prisma.projectProduct.update({
-        where: { id: existing.id },
-        data: { quantity: existing.quantity + (parseInt(quantity) || 1) },
-        include: { product: { select: productSelectFields } }
+      const existing = await tx.projectProduct.findUnique({
+        where: { projectId_productId: { projectId, productId: pId } }
       });
-      return res.json(updated);
-    }
 
-    const pp = await prisma.projectProduct.create({
-      data: {
-        projectId,
-        productId: parseInt(productId),
-        quantity: parseInt(quantity) || 1,
-        note: note || null,
-        assignedById: authReq.user?.id || null
-      },
-      include: { product: { select: productSelectFields } }
+      let updatedPP;
+      if (existing) {
+        updatedPP = await tx.projectProduct.update({
+          where: { id: existing.id },
+          data: { quantity: existing.quantity + qty },
+          include: { product: { select: productSelectFields } }
+        });
+      } else {
+        updatedPP = await tx.projectProduct.create({
+          data: {
+            projectId,
+            productId: pId,
+            quantity: qty,
+            note: note || null,
+            assignedById: authReq.user?.id || null
+          },
+          include: { product: { select: productSelectFields } }
+        });
+      }
+
+      // Decrement product stock quantity
+      await tx.product.update({
+        where: { id: pId },
+        data: { stockQuantity: { decrement: qty } }
+      });
+
+      // Record Stock Movement (OUT)
+      if (authReq.user?.id) {
+        await tx.stockMovement.create({
+          data: {
+            productId: pId,
+            userId: authReq.user.id,
+            changeAmount: -qty,
+            movementType: 'OUT',
+            reason: `Proje kullanımı: ${project.name}`
+          }
+        });
+      }
+
+      return updatedPP;
     });
 
     res.status(201).json(pp);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Add product to project error:', error);
-    res.status(500).json({ error: 'Ürün projeye eklenirken hata oluştu' });
+    res.status(500).json({ error: error.message || 'Ürün projeye eklenirken hata oluştu' });
   }
 };
 
 // DELETE /api/projects/:id/products/:productId
 export const removeProductFromProject = async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthenticatedRequest;
     const projectId = parseInt(req.params.id);
     const productId = parseInt(req.params.productId);
 
@@ -255,24 +308,48 @@ export const removeProductFromProject = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Geçersiz ID' });
     }
 
-    const pp = await prisma.projectProduct.findUnique({
-      where: { projectId_productId: { projectId, productId } }
+    await prisma.$transaction(async (tx) => {
+      const pp = await tx.projectProduct.findUnique({
+        where: { projectId_productId: { projectId, productId } },
+        include: { project: { select: { name: true } } }
+      });
+
+      if (!pp) throw new Error('Proje-ürün ilişkisi bulunamadı');
+
+      // Delete project-product assignment
+      await tx.projectProduct.delete({ where: { id: pp.id } });
+
+      // Restore product stock quantity (Increment back)
+      await tx.product.update({
+        where: { id: productId },
+        data: { stockQuantity: { increment: pp.quantity } }
+      });
+
+      // Record Stock Movement (IN)
+      if (authReq.user?.id) {
+        await tx.stockMovement.create({
+          data: {
+            productId,
+            userId: authReq.user.id,
+            changeAmount: pp.quantity,
+            movementType: 'IN',
+            reason: `Proje stok iadesi: ${pp.project.name}`
+          }
+        });
+      }
     });
 
-    if (!pp) return res.status(404).json({ error: 'Proje-ürün ilişkisi bulunamadı' });
-
-    await prisma.projectProduct.delete({ where: { id: pp.id } });
-
-    res.json({ success: true, message: 'Ürün projeden çıkarıldı' });
-  } catch (error) {
+    res.json({ success: true, message: 'Ürün projeden çıkarıldı ve stoğa iade edildi' });
+  } catch (error: any) {
     console.error('Remove product from project error:', error);
-    res.status(500).json({ error: 'Ürün projeden çıkarılırken hata oluştu' });
+    res.status(500).json({ error: error.message || 'Ürün projeden çıkarılırken hata oluştu' });
   }
 };
 
 // PUT /api/projects/:id/products/:productId
 export const updateProjectProduct = async (req: Request, res: Response) => {
   try {
+    const authReq = req as AuthenticatedRequest;
     const projectId = parseInt(req.params.id);
     const productId = parseInt(req.params.productId);
     const { quantity, note } = req.body;
@@ -281,24 +358,53 @@ export const updateProjectProduct = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Geçersiz ID' });
     }
 
-    const pp = await prisma.projectProduct.findUnique({
-      where: { projectId_productId: { projectId, productId } }
+    const updatedPP = await prisma.$transaction(async (tx) => {
+      const pp = await tx.projectProduct.findUnique({
+        where: { projectId_productId: { projectId, productId } },
+        include: { project: { select: { name: true } } }
+      });
+
+      if (!pp) throw new Error('Proje-ürün ilişkisi bulunamadı');
+
+      const newQty = quantity !== undefined ? parseInt(quantity) : pp.quantity;
+      const diff = newQty - pp.quantity; // positive means increased project usage, negative means reduced project usage
+
+      const updated = await tx.projectProduct.update({
+        where: { id: pp.id },
+        data: {
+          quantity: newQty,
+          note: note !== undefined ? note : pp.note
+        },
+        include: { product: { select: productSelectFields } }
+      });
+
+      if (diff !== 0) {
+        // Adjust product stock quantity (if diff > 0, decrement stock; if diff < 0, increment stock)
+        await tx.product.update({
+          where: { id: productId },
+          data: { stockQuantity: { decrement: diff } }
+        });
+
+        // Record stock movement
+        if (authReq.user?.id) {
+          await tx.stockMovement.create({
+            data: {
+              productId,
+              userId: authReq.user.id,
+              changeAmount: -diff,
+              movementType: diff > 0 ? 'OUT' : 'IN',
+              reason: `Proje malzeme miktar güncellemesi: ${pp.project.name}`
+            }
+          });
+        }
+      }
+
+      return updated;
     });
 
-    if (!pp) return res.status(404).json({ error: 'Proje-ürün ilişkisi bulunamadı' });
-
-    const updated = await prisma.projectProduct.update({
-      where: { id: pp.id },
-      data: {
-        quantity: quantity !== undefined ? parseInt(quantity) : pp.quantity,
-        note: note !== undefined ? note : pp.note
-      },
-      include: { product: { select: productSelectFields } }
-    });
-
-    res.json(updated);
-  } catch (error) {
+    res.json(updatedPP);
+  } catch (error: any) {
     console.error('Update project product error:', error);
-    res.status(500).json({ error: 'Proje ürünü güncellenirken hata oluştu' });
+    res.status(500).json({ error: error.message || 'Proje ürünü güncellenirken hata oluştu' });
   }
 };
