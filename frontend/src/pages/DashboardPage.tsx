@@ -1,19 +1,23 @@
-import { useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getDashboardStats, getDashboardCharts, type CriticalStockItem } from '../api/dashboard';
-import { getCategories } from '../api/products';
+import { getCategories, createCategory } from '../api/products';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeProvider';
 import { Skeleton } from '../components/ui/skeleton';
 import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer
 } from 'recharts';
 import {
-  Plus, ArrowUpCircle, ArrowDownCircle, PackageCheck,
+  Plus, ArrowUpCircle, ArrowDownCircle,
   Box, AlertTriangle, Star, TrendingUp, TrendingDown,
-  ChevronRight, ArrowDown, ArrowUp
+  ChevronRight, ArrowDown, ArrowUp, FolderTree, X
 } from 'lucide-react';
 
 /* ── Sabitler ───────────────────────────────────── */
@@ -32,8 +36,14 @@ const CAT_EMOJI_MAP: Record<string, string> = {
   'Konnektör': '🔗',
   'Kablo': '〽️',
   'Test': '🔬',
+  'test': '🧪',
   'Soğutucular': '❄️',
   'Ofisler': '🏢',
+  'Ofis Malzemeleri': '📑',
+  'Çip': '📟',
+  'Regülatör': '⚙️',
+  'Yarı İletken Anahtarlar': '🎛️',
+  'Yarı İletken Bileşenler': '🔬',
   'Diğer': '📦',
 };
 
@@ -116,12 +126,12 @@ const CriticalStockBar = ({ item, isDark }: { item: CriticalStockItem; isDark: b
 const CategoryCard = ({ name, productCount, isDark }: { name: string; productCount: number; isDark: boolean }) => {
   const emoji = CAT_EMOJI_MAP[name] || '📦';
   return (
-    <div className={`rounded-xl border p-3 flex flex-col items-center text-center gap-1.5 transition-all cursor-pointer btn-tactile
+    <div className={`rounded-xl border p-3 flex flex-col items-center text-center gap-1.5 transition-all cursor-pointer btn-tactile h-full justify-center min-h-[96px]
       ${isDark
         ? 'bg-[#1e293b] border-white/[0.07] hover:border-amber-500/30 hover:bg-amber-500/5'
         : 'bg-white border-slate-100 hover:border-amber-200 hover:bg-amber-50/30 shadow-sm'
       }`}>
-      <div className={`h-12 w-12 rounded-xl flex items-center justify-center text-2xl
+      <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-2xl shrink-0
         ${isDark ? 'bg-amber-500/10' : 'bg-amber-50'}`}>
         {emoji}
       </div>
@@ -137,6 +147,12 @@ export const DashboardPage = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  // Kategori Modal State
+  const [createCatModalOpen, setCreateCatModalOpen] = useState(false);
+  const [catNameInput, setCatNameInput] = useState('');
+  const [catParentIdInput, setCatParentIdInput] = useState<string>('null');
 
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboardStats'],
@@ -155,6 +171,35 @@ export const DashboardPage = () => {
     queryFn: getCategories
   });
 
+  // Kategori Ekleme Mutation
+  const createCatMutation = useMutation({
+    mutationFn: createCategory,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['categories'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardCharts'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboardStats'] });
+      setCreateCatModalOpen(false);
+      setCatNameInput('');
+      setCatParentIdInput('null');
+    },
+    onError: (err: any) => {
+      alert(err?.response?.data?.error || 'Kategori eklenirken hata oluştu');
+    }
+  });
+
+  const handleSaveCategory = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!catNameInput.trim()) return;
+
+    createCatMutation.mutate({
+      name: catNameInput.trim(),
+      parentId: catParentIdInput === 'null' ? null : parseInt(catParentIdInput),
+      icon: 'Package',
+      color: 'slate-500',
+      formSchema: []
+    });
+  };
+
   // Pie chart verisi
   const pieData = useMemo(() =>
     (charts?.categoryDistribution || [])
@@ -172,14 +217,8 @@ export const DashboardPage = () => {
     [pieData]
   );
 
-  // Stat kartları config (Tüm veriler %100 canlı veritabanından çekilmektedir)
+  // Stat kartları config (5 Adet Kart - Toplam Ürün Çıkarıldı)
   const statCards = stats ? [
-    {
-      label: 'Toplam Ürün',
-      value: stats.totalProducts.toLocaleString('tr-TR'),
-      icon: <PackageCheck className="h-5 w-5 text-blue-500" />,
-      iconBg: isDark ? 'bg-blue-500/10' : 'bg-blue-50'
-    },
     {
       label: 'Toplam Stok',
       value: stats.totalStock.toLocaleString('tr-TR'),
@@ -213,7 +252,6 @@ export const DashboardPage = () => {
       isText: true
     }
   ] : [];
-
 
   const isLoading = statsLoading || chartsLoading;
 
@@ -268,13 +306,13 @@ export const DashboardPage = () => {
         </div>
       </div>
 
-      {/* ── Stat Kartları ── */}
+      {/* ── Stat Kartları (5 Adet Kart) ── */}
       {isLoading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          {[1, 2, 3, 4, 5, 6].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           {statCards.map((card, i) => (
             <StatCard
               key={i}
@@ -337,7 +375,7 @@ export const DashboardPage = () => {
                     />
                   </PieChart>
                 </ResponsiveContainer>
-                {/* Donut merkez etiketi — SVG içine değil, üstüne absolute konumlandırılmış */}
+                {/* Donut merkez etiketi */}
                 {totalProductsForPie > 0 && (
                   <div
                     className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none"
@@ -354,7 +392,6 @@ export const DashboardPage = () => {
                   </div>
                 )}
               </div>
-
 
               {/* Legend */}
               <div className="space-y-2">
@@ -402,6 +439,23 @@ export const DashboardPage = () => {
                   />
                 </Link>
               ))}
+
+              {/* ➕ Kategori Ekle Kartı (En Son) */}
+              <div
+                onClick={() => setCreateCatModalOpen(true)}
+                className={`rounded-xl border border-dashed p-3 flex flex-col items-center justify-center text-center gap-1.5 transition-all cursor-pointer btn-tactile min-h-[96px]
+                  ${isDark
+                    ? 'bg-amber-500/5 border-amber-500/30 hover:border-amber-400 hover:bg-amber-500/10 text-amber-400'
+                    : 'bg-amber-50/50 border-amber-300 hover:border-amber-400 hover:bg-amber-100/50 text-amber-800 shadow-sm'
+                  }`}
+              >
+                <div className={`h-10 w-10 rounded-xl flex items-center justify-center text-xl font-bold shrink-0
+                  ${isDark ? 'bg-amber-500/20 text-amber-400' : 'bg-amber-200/70 text-amber-900'}`}>
+                  <Plus className="h-5 w-5" />
+                </div>
+                <p className="text-xs font-bold leading-tight">Kategori Ekle</p>
+                <p className={`text-[10px] ${isDark ? 'text-amber-400/70' : 'text-amber-700/80'}`}>+ Yeni Oluştur</p>
+              </div>
             </div>
           )}
         </div>
@@ -509,6 +563,76 @@ export const DashboardPage = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Kategori Ekleme Modalı ── */}
+      {createCatModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
+          <Card className={`w-full max-w-md rounded-2xl shadow-2xl border
+            ${isDark ? 'bg-[#1e293b] border-white/10 text-white' : 'bg-white border-slate-200 text-slate-900'}`}>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <FolderTree className="h-5 w-5 text-amber-500" /> Yeni Kategori Ekle
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 rounded-full"
+                onClick={() => setCreateCatModalOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSaveCategory} className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Kategori Adı *</Label>
+                  <Input
+                    placeholder="Örn: Entegre, Transistör, Çip..."
+                    value={catNameInput}
+                    onChange={e => setCatNameInput(e.target.value)}
+                    required
+                    className="h-10 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold">Üst Kategori</Label>
+                  <Select value={catParentIdInput} onValueChange={setCatParentIdInput}>
+                    <SelectTrigger className="h-10 text-sm">
+                      <SelectValue placeholder="Ana Kategori (Yok)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="null">Ana Kategori (Yok)</SelectItem>
+                      {categories?.map(c => (
+                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-white/5">
+                  <Button
+                    variant="outline"
+                    type="button"
+                    className="h-9 text-xs"
+                    onClick={() => setCreateCatModalOpen(false)}
+                  >
+                    İptal
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="bg-amber-500 hover:bg-amber-600 text-white h-9 text-xs font-semibold px-4"
+                    disabled={createCatMutation.isPending}
+                  >
+                    {createCatMutation.isPending ? 'Ekleniyor...' : 'Kategori Oluştur'}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
     </div>
   );
 };
