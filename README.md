@@ -27,6 +27,37 @@ Depo ve saha çalışanlarının zayıf veya kesintili internet bağlantıların
 
 ---
 
+## 🖼️ Ekran Görüntüleri / Screenshots
+
+<div align="center">
+
+### 🔒 1. Güvenli Giriş Ekranı (Login Page)
+![Giriş Ekranı](docs/screenshots/login.jpg)
+
+<br/>
+
+### 📊 2. Canlı Kontrol Paneli (Interactive Dashboard)
+![Dashboard Ekranı](docs/screenshots/dashboard.jpg)
+
+<br/>
+
+### 📋 3. Yeni Proje Oluşturma & Malzeme Seçim Modalı
+![Yeni Proje Oluştur Modalı](docs/screenshots/new_project_modal.png)
+
+<br/>
+
+### 📜 4. Sistem Denetim Kayıtları (Audit Logs)
+![Sistem Denetim Kayıtları](docs/screenshots/audit_logs.png)
+
+<br/>
+
+### ⚙️ 5. Ayarlar & Web Push Bildirimleri (Settings & Profile)
+![Profil ve Bildirim Ayarları](docs/screenshots/settings_profile.png)
+
+</div>
+
+---
+
 ## ✨ Öne Çıkan Özellikler
 
 ### 📊 1. Canlı & İnteraktif Dashboard (Analytics)
@@ -34,7 +65,7 @@ Depo ve saha çalışanlarının zayıf veya kesintili internet bağlantıların
 - **Dinamik Grafikler:** Recharts destekli Kategori Dağılım Donut Chart ve Kritik Stok Seviyeleri (Progress Bar).
 - **Hızlı Erişim Grid'i:** Kategori bazlı stok miktarlarına doğrudan erişim paneli.
 
-### 📋 2. Proje Yönetimi ve Çift Yönlü Malzeme Ataması (New 🚀)
+### 📋 2. Proje Yönetimi ve Çift Yönlü Malzeme Ataması
 - **Proje CRUD & Takibi:** Proje oluşturma, düzenleme, silme ve durum yönetimi (*Planlama, Aktif, Tamamlandı, İptal*).
 - **Esnek Ürün Bağlama:**
   1. Proje oluşturma modalında sistemdeki malzemelerden stok miktarı ve not belirterek ürün ekleme.
@@ -95,6 +126,8 @@ ElektromTech_Stok/
 │   │   ├── middlewares/      # Auth, Rate Limit, Audit Log Middleware'leri
 │   │   └── sync-data.ts      # Canlı/Lokal Veri Aktarım Scripti
 │   └── Dockerfile
+├── docs/                     # Görsel ve Ekran Görüntüsü Varlıkları
+│   └── screenshots/          # README Ekran Görüntüleri
 ├── frontend/                 # React + TypeScript Vite PWA
 │   ├── src/
 │   │   ├── api/              # Axios Client & Offline Fallback Fonksiyonları
@@ -152,7 +185,6 @@ Erişim: `http://localhost:5173`
 
 ---
 
-
 ## 🌐 API Uç Noktaları (Endpoints Summary)
 
 ### **Auth & Kullanıcılar**
@@ -174,8 +206,11 @@ Erişim: `http://localhost:5173`
 
 ---
 
-## 👤 Geliştirici & Lisans
+## 👤 Geliştirici & İletişim
 
 - **Geliştirici:** Mehmet Demir
+- **Website & Blog:** [mehmetdemir.blog](https://mehmetdemir.blog/)
+- **LinkedIn:** [Mehmet Demir](https://www.linkedin.com/in/mehmet-demir-35b720207)
+- **GitHub:** [@mhmtdmr155](https://github.com/mhmtdmr155)
 - **Firma / Müşteri:** ATN Yazılım — ElektromTech Elektronik
 - **Lisans:** [MIT License](LICENSE)
