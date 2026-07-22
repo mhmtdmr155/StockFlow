@@ -26,7 +26,7 @@ export const login = async (req: Request, res: Response) => {
       return res.status(401).json({ error: 'Hatalı kullanıcı adı veya şifre' });
     }
 
-    const isPasswordValid = bcrypt.compareSync(password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
       return res.status(401).json({ error: 'Hatalı kullanıcı adı veya şifre' });

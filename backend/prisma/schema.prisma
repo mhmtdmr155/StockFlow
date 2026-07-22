@@ -60,6 +60,8 @@ model Category {
   children    Category[] @relation("CategoryHierarchy")
   products    Product[]
 
+  @@index([parentId])
+  @@index([deletedAt])
   @@map("categories")
 }
 
@@ -85,6 +87,11 @@ model Product {
   images            ProductImage[]
   projects          ProjectProduct[]
 
+  @@index([categoryId])
+  @@index([deletedAt])
+  @@index([productCode])
+  @@index([stockQuantity])
+  @@index([deletedAt, categoryId])
   @@map("products")
 }
 
@@ -100,6 +107,9 @@ model StockMovement {
   product      Product      @relation(fields: [productId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
 
+  @@index([productId])
+  @@index([userId])
+  @@index([createdAt])
   @@map("stock_movements")
 }
 
@@ -112,6 +122,7 @@ model Notification {
 
   product   Product  @relation(fields: [productId], references: [id])
 
+  @@index([productId])
   @@map("notifications")
 }
 
@@ -124,6 +135,7 @@ model ProductImage {
 
   product   Product  @relation(fields: [productId], references: [id])
 
+  @@index([productId])
   @@map("product_images")
 }
 
@@ -138,6 +150,7 @@ model SyncQueue {
 
   user       User      @relation(fields: [userId], references: [id])
 
+  @@index([userId])
   @@map("sync_queue")
 }
 
@@ -154,6 +167,9 @@ model AuditLog {
 
   user       User?     @relation(fields: [userId], references: [id])
 
+  @@index([createdAt])
+  @@index([userId])
+  @@index([entityType, entityId])
   @@map("audit_logs")
 }
 
@@ -166,6 +182,7 @@ model PushSubscription {
 
   user      User     @relation(fields: [userId], references: [id])
 
+  @@index([userId])
   @@map("push_subscriptions")
 }
 
@@ -184,6 +201,7 @@ model Project {
   createdBy   User?           @relation("ProjectCreator", fields: [createdById], references: [id])
   products    ProjectProduct[]
 
+  @@index([deletedAt])
   @@map("projects")
 }
 
@@ -201,5 +219,6 @@ model ProjectProduct {
   assignedBy   User?    @relation("ProjectProductAssigner", fields: [assignedById], references: [id])
 
   @@unique([projectId, productId])
+  @@index([productId])
   @@map("project_products")
 }

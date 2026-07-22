@@ -6,13 +6,26 @@ export const getDashboardStats = async (req: Request, res: Response) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [totalProducts, totalCategories, allProducts, todayIn, todayOut] = await prisma.$transaction([
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const [
+      totalProducts,
+      totalCategories,
+      totalStockRes,
+      lowStockRes,
+      todayIn,
+      todayOut,
+      mostMovedGroup
+    ] = await Promise.all([
       prisma.product.count({ where: { deletedAt: null } }),
       prisma.category.count({ where: { deletedAt: null } }),
-      prisma.product.findMany({
-        where: { deletedAt: null },
-        select: { stockQuantity: true, minimumStock: true }
-      }),
+      prisma.$queryRaw<[{ sum: number }]>`
+        SELECT COALESCE(SUM(stock_quantity), 0)::int as sum FROM products WHERE deleted_at IS NULL
+      `,
+      prisma.$queryRaw<[{ count: number }]>`
+        SELECT COUNT(*)::int as count FROM products WHERE deleted_at IS NULL AND stock_quantity <= minimum_stock
+      `,
       prisma.stockMovement.aggregate({
         where: { movementType: 'IN', createdAt: { gte: today } },
         _sum: { changeAmount: true }
@@ -20,23 +33,18 @@ export const getDashboardStats = async (req: Request, res: Response) => {
       prisma.stockMovement.aggregate({
         where: { movementType: 'OUT', createdAt: { gte: today } },
         _sum: { changeAmount: true }
+      }),
+      prisma.stockMovement.groupBy({
+        by: ['productId'],
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        _count: { id: true },
+        orderBy: { _count: { id: 'desc' } },
+        take: 1
       })
     ]);
 
-    const lowStockCount = allProducts.filter(p => p.stockQuantity <= p.minimumStock).length;
-    const totalStock = allProducts.reduce((sum, p) => sum + p.stockQuantity, 0);
-
-    // En çok hareket gören ürün (son 30 gün)
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const mostMovedGroup = await prisma.stockMovement.groupBy({
-      by: ['productId'],
-      where: { createdAt: { gte: thirtyDaysAgo } },
-      _count: { id: true },
-      orderBy: { _count: { id: 'desc' } },
-      take: 1
-    });
+    const totalStock = totalStockRes[0]?.sum || 0;
+    const lowStockCount = lowStockRes[0]?.count || 0;
 
     let mostUsedProduct: { name: string; quantity: number } | null = null;
     if (mostMovedGroup.length > 0) {
@@ -66,34 +74,45 @@ export const getDashboardStats = async (req: Request, res: Response) => {
 
 export const getDashboardCharts = async (req: Request, res: Response) => {
   try {
-    // 1. Kategori dağılımı
-    const categories = await prisma.category.findMany({
-      where: { deletedAt: null, parentId: null },
-      include: {
-        products: { where: { deletedAt: null } },
-        children: {
-          where: { deletedAt: null },
-          include: {
-            products: { where: { deletedAt: null } }
-          }
-        }
-      }
-    });
+    // 1. Single SQL query to get aggregated stock & product count per category
+    const catStats = await prisma.$queryRaw<Array<{
+      id: number;
+      name: string;
+      color: string | null;
+      parent_id: number | null;
+      productCount: number;
+      totalStock: number;
+    }>>`
+      SELECT 
+        c.id, 
+        c.name, 
+        c.color, 
+        c.parent_id,
+        COALESCE(COUNT(p.id), 0)::int as "productCount",
+        COALESCE(SUM(p.stock_quantity), 0)::int as "totalStock"
+      FROM categories c
+      LEFT JOIN products p ON p.category_id = c.id AND p.deleted_at IS NULL
+      WHERE c.deleted_at IS NULL
+      GROUP BY c.id, c.name, c.color, c.parent_id
+    `;
 
-    const categoryDistribution = categories.map(cat => {
-      let stockSum = cat.products.reduce((sum, p) => sum + p.stockQuantity, 0);
-      let productCount = cat.products.length;
+    // Map parent categories and sum child stats
+    const parentCats = catStats.filter(c => c.parent_id === null);
+    const categoryDistribution = parentCats.map(cat => {
+      let productCount = Number(cat.productCount);
+      let totalStock = Number(cat.totalStock);
 
-      cat.children.forEach(sub => {
-        stockSum += sub.products.reduce((sum, p) => sum + p.stockQuantity, 0);
-        productCount += sub.products.length;
+      const children = catStats.filter(c => c.parent_id === cat.id);
+      children.forEach(sub => {
+        productCount += Number(sub.productCount);
+        totalStock += Number(sub.totalStock);
       });
 
       return {
         categoryName: cat.name,
         color: cat.color || 'slate-500',
         productCount,
-        totalStock: stockSum
+        totalStock
       };
     });
 
@@ -107,7 +126,7 @@ export const getDashboardCharts = async (req: Request, res: Response) => {
       }
     });
 
-    // 3. Son eklenen ürünler
+    // 3. Son eklenen ürünler (5 adet)
     const recentProducts = await prisma.product.findMany({
       take: 5,
       where: { deletedAt: null },
@@ -115,33 +134,36 @@ export const getDashboardCharts = async (req: Request, res: Response) => {
       include: { category: { select: { name: true } } }
     });
 
-    // 4. Kritik stoklar (İlk 5)
-    const allProducts = await prisma.product.findMany({
-      where: { deletedAt: null },
-      orderBy: { stockQuantity: 'asc' },
-      take: 20,
-      select: {
-        id: true,
-        name: true,
-        productCode: true,
-        stockQuantity: true,
-        minimumStock: true
-      }
-    });
+    // 4. Kritik stoklar (SQL ile filtresiz direk ilk 5)
+    const rawCritical = await prisma.$queryRaw<Array<{
+      id: number;
+      name: string;
+      productCode: string;
+      stockQuantity: number;
+      minimumStock: number;
+    }>>`
+      SELECT 
+        id, 
+        name, 
+        product_code as "productCode", 
+        stock_quantity as "stockQuantity", 
+        minimum_stock as "minimumStock"
+      FROM products
+      WHERE deleted_at IS NULL AND stock_quantity <= minimum_stock
+      ORDER BY stock_quantity ASC
+      LIMIT 5
+    `;
 
-    const criticalStocks = allProducts
-      .filter(p => p.stockQuantity <= p.minimumStock)
-      .slice(0, 5)
-      .map(p => ({
-        id: p.id,
-        name: p.name,
-        productCode: p.productCode,
-        stockQuantity: p.stockQuantity,
-        minimumStock: p.minimumStock,
-        percentage: p.minimumStock > 0
-          ? Math.round((p.stockQuantity / p.minimumStock) * 100)
-          : 0
-      }));
+    const criticalStocks = rawCritical.map(p => ({
+      id: p.id,
+      name: p.name,
+      productCode: p.productCode,
+      stockQuantity: p.stockQuantity,
+      minimumStock: p.minimumStock,
+      percentage: p.minimumStock > 0
+        ? Math.round((p.stockQuantity / p.minimumStock) * 100)
+        : 0
+    }));
 
     res.json({
       categoryDistribution,
@@ -154,3 +176,4 @@ export const getDashboardCharts = async (req: Request, res: Response) => {
     res.status(500).json({ error: 'Grafik verileri yüklenirken hata oluştu' });
   }
 };
+

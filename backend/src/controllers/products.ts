@@ -16,7 +16,7 @@ export const getProducts = async (req: Request, res: Response) => {
       
       // Alt kategorileri de bul
       const subcategories = await prisma.category.findMany({
-        where: { parentId: catId },
+        where: { parentId: catId, deletedAt: null },
         select: { id: true }
       });
       
@@ -34,10 +34,15 @@ export const getProducts = async (req: Request, res: Response) => {
       };
     }
 
-    if (lowStock === 'true') {
-      whereClause.stockQuantity = {
-        lte: prisma.product.fields.minimumStock // In Prisma we can use field reference or just check below threshold in Javascript. Since field reference is database-specific, let's query and filter, or use raw query. Or just use a simple where filter in prisma? Actually, in Prisma we can do this or filter after fetching. Let's fetch all and filter in JS if needed, or check if we can write a clean query.
-      };
+    if (search && (search as string).trim() !== '') {
+      const s = (search as string).trim();
+      whereClause.OR = [
+        { productCode: { contains: s, mode: 'insensitive' } },
+        { name: { contains: s, mode: 'insensitive' } },
+        { materialCode: { contains: s, mode: 'insensitive' } },
+        { description: { contains: s, mode: 'insensitive' } },
+        { location: { contains: s, mode: 'insensitive' } }
+      ];
     }
 
     let products = await prisma.product.findMany({
@@ -57,15 +62,8 @@ export const getProducts = async (req: Request, res: Response) => {
       }
     });
 
-    if (search) {
-      const s = (search as string).toLowerCase();
-      products = products.filter(p => 
-        p.productCode.toLowerCase().includes(s) ||
-        p.name.toLowerCase().includes(s) ||
-        (p.materialCode && p.materialCode.toLowerCase().includes(s)) ||
-        (p.description && p.description.toLowerCase().includes(s)) ||
-        (p.location && p.location.toLowerCase().includes(s))
-      );
+    if (lowStock === 'true') {
+      products = products.filter(p => p.stockQuantity <= p.minimumStock);
     }
 
     res.json(products);
@@ -293,22 +291,31 @@ export const deleteProduct = async (req: Request, res: Response) => {
 
 export const getLowStockProducts = async (req: Request, res: Response) => {
   try {
-    // Find all products where stockQuantity <= minimumStock and deletedAt is null
-    const products = await prisma.product.findMany({
-      where: {
-        deletedAt: null
-      },
-      include: {
-        category: {
-          select: { name: true, color: true }
-        }
-      }
-    });
-
-    const lowStockProducts = products.filter(p => p.stockQuantity <= p.minimumStock);
+    const lowStockProducts = await prisma.$queryRaw`
+      SELECT 
+        p.id,
+        p.category_id as "categoryId",
+        p.product_code as "productCode",
+        p.material_code as "materialCode",
+        p.name,
+        p.description,
+        p.stock_quantity as "stockQuantity",
+        p.minimum_stock as "minimumStock",
+        p.location,
+        p.attributes,
+        p.version,
+        p.created_at as "createdAt",
+        p.updated_at as "updatedAt",
+        json_build_object('name', c.name, 'color', c.color) as category
+      FROM products p
+      JOIN categories c ON c.id = p.category_id
+      WHERE p.deleted_at IS NULL AND p.stock_quantity <= p.minimum_stock
+      ORDER BY p.stock_quantity ASC
+    `;
 
     res.json(lowStockProducts);
   } catch (error) {
+    console.error('Get low stock error:', error);
     res.status(500).json({ error: 'Düşük stoklu ürünler yüklenirken hata oluştu' });
   }
 };

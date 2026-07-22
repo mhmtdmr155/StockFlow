@@ -9,11 +9,11 @@ export const getCategories = async (req: Request, res: Response) => {
         deletedAt: null
       },
       include: {
-        products: {
-          where: { deletedAt: null }
-        },
-        children: {
-          where: { deletedAt: null }
+        _count: {
+          select: {
+            products: { where: { deletedAt: null } },
+            children: { where: { deletedAt: null } }
+          }
         }
       }
     });
@@ -28,8 +28,8 @@ export const getCategories = async (req: Request, res: Response) => {
       formSchema: cat.formSchema,
       createdAt: cat.createdAt,
       updatedAt: cat.updatedAt,
-      productCount: cat.products.length,
-      subcategoriesCount: cat.children.length
+      productCount: cat._count.products,
+      subcategoriesCount: cat._count.children
     }));
 
     res.json(mappedCategories);

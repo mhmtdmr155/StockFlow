@@ -11,21 +11,16 @@ export const getCategories = async (): Promise<Category[]> => {
       const response = await apiClient.get('/categories');
       const categories: Category[] = response.data;
       
-      try {
-        // Update local IndexedDB safely
-        await db.categories.clear();
-        await db.categories.bulkPut(categories.map(cat => ({
-          id: cat.id,
-          name: cat.name,
-          parentId: cat.parentId,
-          icon: cat.icon,
-          color: cat.color,
-          formSchema: cat.formSchema,
-          productCount: cat.productCount
-        })));
-      } catch (dbErr) {
-        console.error('Failed to write categories to local DB:', dbErr);
-      }
+      // Update local IndexedDB asynchronously in background without blocking return
+      db.categories.bulkPut(categories.map(cat => ({
+        id: cat.id,
+        name: cat.name,
+        parentId: cat.parentId,
+        icon: cat.icon,
+        color: cat.color,
+        formSchema: cat.formSchema,
+        productCount: cat.productCount
+      }))).catch((dbErr: any) => console.error('Failed to write categories to local DB:', dbErr));
       
       return categories;
     } catch (error) {
@@ -49,14 +44,10 @@ export const getProducts = async (filters?: { categoryId?: number; search?: stri
       const response = await apiClient.get('/products', { params: filters });
       const products: Product[] = response.data;
 
-      try {
-        // Update local IndexedDB (cache) for these fetched products
-        const pendingSyncs = await db.syncQueue.count();
+      // Update local IndexedDB asynchronously in background without blocking
+      db.syncQueue.count().then((pendingSyncs: number) => {
         if (pendingSyncs === 0) {
-          if (!filters || (!filters.categoryId && !filters.search)) {
-            await db.products.clear();
-          }
-          await db.products.bulkPut(products.map(p => ({
+          db.products.bulkPut(products.map(p => ({
             id: p.id,
             categoryId: p.categoryId,
             productCode: p.productCode,
@@ -70,11 +61,9 @@ export const getProducts = async (filters?: { categoryId?: number; search?: stri
             version: p.version,
             createdAt: p.createdAt,
             updatedAt: p.updatedAt
-          })));
+          }))).catch((err: any) => console.error('Failed to write products to local DB:', err));
         }
-      } catch (dbErr) {
-        console.error('Failed to write products to local DB:', dbErr);
-      }
+      }).catch((err: any) => console.error('Failed to check syncQueue count:', err));
 
       return products;
     } catch (error) {
